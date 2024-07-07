@@ -21,8 +21,12 @@ fn main() {
                 dbg!("{request}");
                 let filepath = request.split_whitespace().nth(1).unwrap();
                 dbg!("{filepath}");
+
                 if filepath == "/" {
                     let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
+                } else if filepath.starts_with("/echo") {
+                    let str = filepath.trim_start_matches("/echo/");
+                    let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", str.len(), str).as_bytes());
                 } else {
                     let _ = stream.write_all("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
                 }
