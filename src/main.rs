@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::fs;
+use std::net::TcpStream;
+use std::path::Path;
 use std::{
     io::{BufRead, BufReader, Write},
     net::TcpListener,
@@ -69,43 +72,63 @@ impl HttpRequest {
     }
 }
 
+fn handle_connection(mut stream: TcpStream) {
+    println!("accepted new connection");
+
+    let buf_reader = BufReader::new(&mut stream);
+    let http_request: Vec<_> = buf_reader
+        .lines()
+        .map(|result| result.unwrap())
+        .take_while(|line| !line.is_empty())
+        .collect();
+
+    match HttpRequest::parse_request(http_request) {
+        Ok(http_request) => {
+            // dbg!(&http_request);
+            if http_request.url == "/" {
+                let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
+            } else if http_request.url.starts_with("/echo") {
+                let str = http_request.url.trim_start_matches("/echo/");
+                let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", str.len(), str).as_bytes());
+            } else if http_request.url.starts_with("/user-agent") {
+                let str = http_request
+                    .headers
+                    .get("User-Agent")
+                    .unwrap()
+                    .first()
+                    .unwrap();
+                let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", str.len(), str).as_bytes());
+            } else if http_request.url.starts_with("/files") {
+                let filename = http_request.url.strip_prefix("/files/").unwrap();
+                let args = std::env::args().collect::<Vec<_>>();
+                let directory = args
+                    .iter()
+                    .skip_while(|x| **x != "--directory")
+                    .nth(1)
+                    .unwrap();
+                dbg!(&directory);
+                let file_path = format!("{directory}{filename}");
+                let file_path = Path::new(file_path.as_str());
+                if file_path.is_file() {
+                    let file_content = fs::read_to_string(file_path).unwrap();
+                    let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}", file_content.len(), file_content).as_bytes());
+                }
+                let _ = stream.write_all("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
+            } else {
+                let _ = stream.write_all("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
+            }
+        }
+        Err(err) => eprintln!("{err}"),
+    }
+}
+
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     for stream in listener.incoming() {
         match stream {
-            Ok(mut stream) => {
-                println!("accepted new connection");
-
-                let buf_reader = BufReader::new(&mut stream);
-                let http_request: Vec<_> = buf_reader
-                    .lines()
-                    .map(|result| result.unwrap())
-                    .take_while(|line| !line.is_empty())
-                    .collect();
-
-                match HttpRequest::parse_request(http_request) {
-                    Ok(http_request) => {
-                        // dbg!(&http_request);
-                        if http_request.url == "/" {
-                            let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
-                        } else if http_request.url.starts_with("/echo") {
-                            let str = http_request.url.trim_start_matches("/echo/");
-                            let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", str.len(), str).as_bytes());
-                        } else if http_request.url.starts_with("/user-agent") {
-                            let str = http_request
-                                .headers
-                                .get("User-Agent")
-                                .unwrap()
-                                .first()
-                                .unwrap();
-                            let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}", str.len(), str).as_bytes());
-                        } else {
-                            let _ = stream.write_all("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
-                        }
-                    }
-                    Err(err) => eprintln!("{err}"),
-                }
+            Ok(stream) => {
+                std::thread::spawn(|| handle_connection(stream));
             }
             Err(e) => {
                 println!("error: {}", e);
