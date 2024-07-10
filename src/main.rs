@@ -99,7 +99,7 @@ fn get(mut stream: TcpStream, http_request: HttpRequest) {
         let str = http_request.url.trim_start_matches("/echo/");
         let encoding = match http_request.headers.get("Accept-Encoding") {
             Some(x) => {
-                if x[0] == "gzip" {
+                if x[0].split(", ").any(|x| x == "gzip") {
                     "Content-Encoding: gzip\r\n"
                 } else {
                     ""
