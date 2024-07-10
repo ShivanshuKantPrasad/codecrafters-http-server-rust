@@ -97,9 +97,20 @@ fn get(mut stream: TcpStream, http_request: HttpRequest) {
         let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
     } else if http_request.url.starts_with("/echo") {
         let str = http_request.url.trim_start_matches("/echo/");
+        let encoding = match http_request.headers.get("Accept-Encoding") {
+            Some(x) => {
+                if x[0] == "gzip" {
+                    "Content-Encoding: gzip\r\n"
+                } else {
+                    ""
+                }
+            }
+            None => "",
+        };
         let _ = stream.write_all(
             format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n{}Content-Length: {}\r\n\r\n{}",
+                encoding,
                 str.len(),
                 str
             )
