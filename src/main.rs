@@ -3,7 +3,7 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read};
 use std::net::TcpStream;
 use std::path::Path;
 use std::{io::Write, net::TcpListener};
@@ -34,25 +34,21 @@ struct HttpRequest {
 
 impl HttpRequest {
     fn parse_request(stream: &mut TcpStream) -> Result<Self, String> {
-        let mut buf = vec![0u8; 2048];
-        let _ = stream.read(&mut buf);
-        let http_message = String::from_utf8(buf).unwrap();
-        let http_request: Vec<_> = http_message
-            .lines()
-            .take_while(|line| !line.is_empty())
-            .collect();
+        let mut buf_reader = BufReader::new(stream);
+        let mut lines = buf_reader.by_ref().lines().map(|line| line.unwrap());
 
-        let request_line = http_request[0].split_whitespace().collect::<Vec<_>>();
-        let method = match request_line.first() {
+        let request_line = lines.next().unwrap();
+        let request = request_line.split_whitespace().collect::<Vec<_>>();
+        let method = match request.first() {
             Some(&"GET") => HttpMethod::Get,
             Some(&"POST") => HttpMethod::Post,
             _ => return Err(String::from("Http Header: Bad Method?")),
         };
-        let url = match request_line.get(1) {
+        let url = match request.get(1) {
             Some(&url) => url.to_string(),
             None => return Err(String::from("Http Header: Missing URL?")),
         };
-        let version = match request_line.last() {
+        let version = match request.last() {
             Some(&"HTTP/0.9") => HttpVersion::Http09,
             Some(&"HTTP/1.0") => HttpVersion::Http10,
             Some(&"HTTP/1.1") => HttpVersion::Http11,
@@ -62,7 +58,10 @@ impl HttpRequest {
         };
 
         let mut headers: HashMap<String, Vec<String>> = HashMap::default();
-        for header in http_request[1..].iter() {
+        for header in lines.by_ref() {
+            if header.is_empty() {
+                break;
+            }
             match header.split_once(':') {
                 Some((header, value)) => headers
                     .entry(header.to_string())
@@ -74,12 +73,10 @@ impl HttpRequest {
 
         let body = match headers.get("Content-Length") {
             Some(_value) => {
-                let body = http_message
-                    .split_once("\r\n\r\n")
-                    .unwrap()
-                    .1
-                    .trim_end_matches('\0');
-                Some(body.to_string())
+                let length = _value[0].parse().unwrap();
+                let mut body = vec![0; length];
+                let _ = buf_reader.read_exact(&mut body);
+                Some(String::from_utf8(body).unwrap())
             }
             None => None,
         };
