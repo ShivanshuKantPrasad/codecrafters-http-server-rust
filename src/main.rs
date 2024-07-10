@@ -1,4 +1,6 @@
 use anyhow::Result;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
@@ -107,15 +109,24 @@ fn get(mut stream: TcpStream, http_request: HttpRequest) {
             }
             None => "",
         };
-        let _ = stream.write_all(
+        let str = if !encoding.is_empty() {
+            let mut e = GzEncoder::new(Vec::new(), Compression::default());
+            let _ = e.write_all(str.as_bytes());
+            e.finish().unwrap()
+        } else {
+            str.as_bytes().to_vec()
+        };
+        let buffer = [
             format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n{}Content-Length: {}\r\n\r\n{}",
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n{}Content-Length: {}\r\n\r\n",
                 encoding,
                 str.len(),
-                str
             )
             .as_bytes(),
-        );
+            str.as_slice(),
+        ]
+        .concat();
+        let _ = stream.write_all(buffer.as_slice());
     } else if http_request.url.starts_with("/user-agent") {
         let str = http_request
             .headers
