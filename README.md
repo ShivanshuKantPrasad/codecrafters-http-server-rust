@@ -37,3 +37,23 @@ Note: This section is for stages 2 and beyond.
    the first time you run it. Subsequent runs will be fast.
 1. Commit your changes and run `git push origin master` to submit your solution
    to CodeCrafters. Test output will be streamed to your terminal.
+
+# Induction Hack Submission
+
+- Requires rust
+- Run with `./your_server.sh --directory public/` to host the files in public folder.
+
+Requirements
+[x] Open a TCP socket on a specified port and listen for connections.
+[x] Correctly parse at least GET requests: Extract method, requested path, and headers.
+[x] Respond with a body – Send a text or HTML body along with correct Content-Length.
+[x] Handle concurrent connections – Serve multiple clients at the same time.
+[x] Handle multiple requests sequentially without crashing.
+[x] Serve static files from a predefined folder (e.g., public/):
+[x] Return a 200 response with the file’s content if it exists.
+[x] Return a 404 response if the file is not found.
+
+[ ] Support additional methods: POST or HEAD.
+[x] Serve a default index.html when / is requested.
+[ ] HTTP/1.1 persistent connections — allow multiple requests on the same connection.
+[x] Support multiple compression schemes (gzip, deflate, etc.).

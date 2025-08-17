@@ -93,7 +93,22 @@ impl HttpRequest {
 fn get(mut stream: TcpStream, http_request: HttpRequest) {
     // dbg!(&http_request);
     if http_request.url == "/" {
-        let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
+        // let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
+
+        // Additional feature Serve a default index.html
+        let args = std::env::args().collect::<Vec<_>>();
+        let directory = args
+            .iter()
+            .skip_while(|x| **x != "--directory")
+            .nth(1)
+            .unwrap();
+        let file_path = format!("{directory}index.html");
+        let file_path = Path::new(file_path.as_str());
+        if file_path.is_file() {
+            let file_content = fs::read_to_string(file_path).unwrap();
+            let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}", file_content.len(), file_content).as_bytes());
+        }
+        let _ = stream.write_all("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
     } else if http_request.url.starts_with("/echo") {
         let str = http_request.url.trim_start_matches("/echo/");
         let encoding = match http_request.headers.get("Accept-Encoding") {
@@ -190,6 +205,15 @@ fn handle_connection(mut stream: TcpStream) {
 
 fn main() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
+    println!("Listening at 127.0.0.1:4221");
+
+    let args = std::env::args().collect::<Vec<_>>();
+    let directory = args
+        .iter()
+        .skip_while(|x| **x != "--directory")
+        .nth(1);
+
+    if directory.is_some() { println!("Hosting the contents of {}", directory.unwrap()); }
 
     for stream in listener.incoming() {
         match stream {
